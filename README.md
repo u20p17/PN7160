@@ -12,3 +12,34 @@ All documentation is in the Repository Wiki : https://github.com/Strooom/PN7160/
 
 
 ![PN7160](https://github.com/Strooom/PN7160/blob/develop/docs/pn7160.png)
+## ESP32 Arduino I2C transport
+
+The ESP32 implementation is selected by `ARDUINO_ARCH_ESP32`; the previous
+RP2040/Teensy/generic transport remains in the other preprocessor branch without
+changes. The same NCI state machine, configuration and tag decoding are used.
+
+The existing `initialize(irq, ven, address)` call uses `Wire` and its default
+pins. For explicit shared-bus ownership use the ESP32 overload:
+
+```cpp
+bool ready = PN7160Interface::initialize(Wire, irq, ven, 0x28, sda, scl, 400000);
+```
+
+Initialization reserves a 258-byte Wire buffer for the 3-byte NCI header plus
+255-byte payload and sets a bounded 20 ms I2C timeout. It reports missing pins,
+invalid I2C addresses and failed bus/buffer initialization. An uninitialized
+reader performs no I/O. IRQ and VEN retain their original active-high semantics.
+Transmit length/ACK checks and complete header/payload reads reject I2C failures;
+failed reads clear the response header so the NCI engine cannot reuse stale data.
+Calls must be serialized by the reader owner, including other users of the bus.
+
+Native tests with a C++17 compiler:
+
+```sh
+python3 test/esp32/run.py
+```
+
+They exercise actual ESP32 transport code and the shared NCI engine, covering
+bus selection, IRQ/VEN, wake retries, 258-byte packets, failed/short transfers,
+4/7/10-byte tag UIDs, repeated-tag suppression, tag removal and reset. Compile
+validation does not replace a real reader/KNX hardware test.
