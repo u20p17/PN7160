@@ -35,15 +35,15 @@ int main()
     for (uint8_t length : {4, 7, 10})
     {
         nci::state = nciState::waitForRfInterfaceActivatedNotification;
-        std::vector<uint8_t> activation(13 + length, 0);
+        std::vector<uint8_t> activation(14 + length, 0);
         activation[0] = 0x61; activation[1] = 0x05;
-        activation[2] = activation.size() - 3; activation[12] = length;
+        activation[2] = activation.size() - 3; activation[12] = length; activation[9] = 4 + length;
         for (uint8_t i = 0; i < length; ++i) activation[13 + i] = i + length;
         deliver(bus, activation);
         assert(nci::getState() == nciState::waitForRfDeactivateResponse);
         assert(nci::getTagStatus() == tagStatus::foundNew);
         assert(nci::tagData.getUniqueIdLength() == length);
-        assert(std::equal(activation.begin() + 13, activation.end(), nci::tagData.getUniqueId()));
+        assert(std::equal(activation.begin() + 13, activation.begin() + 13 + length, nci::tagData.getUniqueId()));
         assert(bus.transmitted == std::vector<uint8_t>({0x21, 0x06, 0x01, 0x00}));
         nci::state = nciState::waitForRfInterfaceActivatedNotification;
         deliver(bus, activation);
@@ -53,6 +53,25 @@ int main()
         delayMs += 2; nci::run();
         assert(nci::getTagStatus() == tagStatus::removed);
         assert(nci::getTagStatus() == tagStatus::absent);
+    }
+    // Seed a real UID, then feed every truncated prefix of a valid activation.
+    // No prefix may reuse its tail from the preceding packet.
+    std::vector<uint8_t> valid(21, 0);
+    valid[0]=0x61;valid[1]=5;valid[2]=18;valid[9]=11;valid[12]=7;
+    for (unsigned i=0;i<7;++i) valid[13+i]=0xa0+i;
+    for (size_t size=3;size<valid.size();++size) {
+        nci::state=nciState::waitForRfInterfaceActivatedNotification;deliver(bus,valid);
+        (void)nci::getTagStatus();
+        auto truncated=valid;truncated.resize(size);truncated[2]=size-3;
+        nci::state=nciState::waitForRfInterfaceActivatedNotification;deliver(bus,truncated);
+        assert(nci::getState()==nciState::error);
+        assert(nci::getTagStatus()!=tagStatus::foundNew);
+    }
+    for (unsigned offset : {6U,9U,12U,20U}) {
+        auto invalid=valid;invalid[offset]=255;
+        nci::state=nciState::waitForRfInterfaceActivatedNotification;deliver(bus,invalid);
+        assert(nci::getState()==nciState::error);
+        assert(nci::getTagStatus()!=tagStatus::foundNew);
     }
     nci::state = nciState::waitForRfInterfaceActivatedNotification;
     bus.responses = {{0x61, 0x05, 4}, {0x01}};
