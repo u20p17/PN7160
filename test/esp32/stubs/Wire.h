@@ -22,6 +22,7 @@ struct TwoWire
     size_t position = 0;
     size_t setBufferSize(size_t size) { bufferSize = size; return bufferResult ? size : 0; }
     bool begin(int a, int b, uint32_t frequency) { sda = a; scl = b; clock = frequency; return beginResult; }
+    void begin() {}
     void setTimeOut(uint16_t value) { timeout = value; }
     void beginTransmission(uint8_t address) { lastAddress = address; ++transmissions; }
     uint8_t endTransmission()

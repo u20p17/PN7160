@@ -43,3 +43,23 @@ They exercise actual ESP32 transport code and the shared NCI engine, covering
 bus selection, IRQ/VEN, wake retries, 258-byte packets, failed/short transfers,
 4/7/10-byte tag UIDs, repeated-tag suppression, tag removal and reset. Compile
 validation does not replace a real reader/KNX hardware test.
+
+
+## Cooperative reader facade for access-control integrations
+
+`lib/reader/pn7160reader.hpp` provides `PN7160Reader` over the existing NCI
+state machine. Configuration supplies IRQ, VEN, address and, on ESP32, the shared
+TwoWire bus and SDA/SCL/clock. RP2040 retains the existing global Wire transport.
+Use one instance per MCU because the legacy transport/state machine is static.
+
+`init()` and `beginDiscovery()` start asynchronous setup. Call `pollForTag(uid)`
+regularly; it advances one NCI step and never sleeps waiting for a tag.
+`discoveryReady()` becomes true after setup reaches RF discovery.
+`isTagStillPresent()` advances discovery and preserves a replacement tag for
+the next poll. `stop()` drives VEN low and clears NCI/tag state, but never ends
+Wire. `healthCheck()` reports NCI errors for the owner's retry policy.
+
+This facade supports ordinary 4/7/10-byte UIDs. It does not add HomeKey, APDU
+exchange or ECP support to the legacy driver. The common access-control service
+provides an adapter and owns enrollment/actions; those remain outside this
+hardware library. Existing low-level users can keep their NCI API.
