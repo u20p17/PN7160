@@ -1,6 +1,6 @@
 {
   "name": "PN7160",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Library for driving the PN7160, an NFC controller.",
   "repository": {
     "type": "git",
